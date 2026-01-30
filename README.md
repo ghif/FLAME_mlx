@@ -33,6 +33,16 @@ This is an implementation of the [FLAME](http://flame.is.tue.mpg.de/) 3D head mo
 
 ## Installation
 
+### Requirements
+- **OS**: macOS (Apple Silicon recommended for MLX)
+- **Python**: 3.11.11 (v3.11+ recommended)
+
+### Core Dependencies
+- **[MLX](https://github.com/ml-explore/mlx)**: Apple's machine learning framework. Used for all core mathematical operations, automatic differentiation, and GPU acceleration on Apple Silicon.
+- **[SciPy](https://scipy.org/)**: Essential for handling the sparse joint regressor and skinning matrices provided in the original FLAME models. 
+- **[Trimesh](https://trimesh.org/)**: Used for high-level 3D mesh processing, handling vertex/face logic, and preparing data for the viewer.
+- **[Viser](https://github.com/nerfstudio-project/viser)**: A modern, web-based 3D visualization library. It powers the interactive dashboard and handles real-time parameter updates.
+
 ### 1. Setup Environment
 It is recommended to use a virtual environment:
 
