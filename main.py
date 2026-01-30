@@ -5,6 +5,16 @@ import numpy as np
 from core import FLAME, get_config
 
 def main():
+    """
+    Main entry point for verifying the FLAME MLX implementation.
+    
+    This script:
+    1. Loads the configuration.
+    2. Checks for required model and embedding files.
+    3. Initializes the FLAME model.
+    4. Executes a forward pass with zeroed parameters.
+    5. Prints the resulting tensor shapes for verification.
+    """
     config = get_config()
     
     # Check if model files exist

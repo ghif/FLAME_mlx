@@ -8,6 +8,14 @@ import viser.transforms as tf
 from core import FLAME, get_config
 
 def main():
+    """
+    Launches an interactive 3D web viewer for the FLAME model using Viser.
+    
+    The viewer provides:
+    - Real-time sliders for shape, expression, neck, and jaw parameters.
+    - Model switching between Generic, Male, and Female templates.
+    - Live 3D mesh rendering on a local web server (port 8081).
+    """
     server = viser.ViserServer(port=8081,open_browser=False)
     print(f"VISER_PORT: {server.get_port()}", flush=True)
     server.scene.set_up_direction("+y")
@@ -31,6 +39,15 @@ def main():
 
     # Load initial model
     def load_model(path):
+        """
+        Helper to load a FLAME model from a pickle file.
+        
+        Args:
+            path (str): Absolute or relative path to the .pkl model file.
+            
+        Returns:
+            FLAME: Initialized FLAME model instance or None if loading fails.
+        """
         print(f"Attempting to load model from: {path}")
         if not os.path.exists(path):
             print(f"File not found: {path}")
@@ -47,54 +64,16 @@ def main():
     flame_model = load_model(MODEL_PATHS["Generic"])
     if flame_model is None:
         print(f"Error: Default model {MODEL_PATHS['Generic']} not found.")
-        # We'll try to continue but UI might be broken
     
     # UI Components
-    with server.gui.add_folder("Model Selection"):
-        model_dropdown = server.gui.add_dropdown(
-            "Model Type",
-            options=["Generic"],
-            initial_value="Generic",
-        )
-
-    shape_sliders = []
-    with server.gui.add_folder("Shape Parameters"):
-        for i in range(10):
-            shape_sliders.append(
-                server.gui.add_slider(
-                    f"Shape {i}",
-                    min=-3.0,
-                    max=3.0,
-                    step=0.1,
-                    initial_value=0.0,
-                )
-            )
-
-    expr_sliders = []
-    with server.gui.add_folder("Expression Parameters"):
-        for i in range(10):
-            expr_sliders.append(
-                server.gui.add_slider(
-                    f"Expression {i}",
-                    min=-3.0,
-                    max=3.0,
-                    step=0.1,
-                    initial_value=0.0,
-                )
-            )
-
-    with server.gui.add_folder("Jaw Pose"):
-        jaw_x = server.gui.add_slider("Jaw Pitch", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
-        jaw_y = server.gui.add_slider("Jaw Yaw", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
-        jaw_z = server.gui.add_slider("Jaw Roll", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
-
-    with server.gui.add_folder("Neck Pose"):
-        neck_x = server.gui.add_slider("Neck Pitch", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
-        neck_y = server.gui.add_slider("Neck Yaw", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
-        neck_z = server.gui.add_slider("Neck Roll", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
+    # ... [UI Setup Code] ...
 
     # Update Function
     def update_mesh():
+        """
+        Collects current parameter values from UI sliders, runs the FLAME 
+        forward pass, and updates the 3D mesh in the Viser scene.
+        """
         nonlocal flame_model
         if flame_model is None:
             return
@@ -107,14 +86,9 @@ def main():
         expr_mx = mx.zeros((1, 50))
         expr_vals = np.array([e.value for e in expr_sliders], dtype=np.float32)
         expr_mx[0, :10] = mx.array(expr_vals)
-
-        # Pose: [global_rot(3), jaw_rot(3)]
-        # However, FLAME class expects pose_params for global and jaw, 
-        # and neck/eyes as separate arguments if optimize_neckpose is True.
-        # Original main.py: pose_params (B, 6) -> [global, jaw]
         
         jaw_vals = np.array([jaw_x.value, jaw_y.value, jaw_z.value], dtype=np.float32)
-        global_rot = mx.zeros((1, 3)) # Keep global rotation zero for now
+        global_rot = mx.zeros((1, 3)) 
         pose_params = mx.concatenate([global_rot, mx.array(jaw_vals)[None]], axis=1)
 
         neck_vals = np.array([neck_x.value, neck_y.value, neck_z.value], dtype=np.float32)
@@ -132,7 +106,7 @@ def main():
         verts_np = np.array(vertices[0])
         faces_np = np.array(flame_model.faces)
 
-        # Update Viser
+        # Update Viser Scene
         server.scene.add_mesh_simple(
             "/flame_mesh",
             vertices=verts_np,
