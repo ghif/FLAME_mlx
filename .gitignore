@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+.mlx_env/
+
+# MLX / Project Specific
+model/
+*.pkl
+*.npy
+*.zip
+*.log
+
+# Viser
+.viser/
+
+# Media / Resources (Optional: exclude if you don't want to track large binaries)
+# resources/
+
+# System
+.DS_Store

@@ -1,0 +1,6 @@
+mlx>=0.28.0
+numpy
+scipy
+trimesh
+viser
+pickle5; python_version < "3.8"
