@@ -20,10 +20,25 @@ from .utils import Struct, to_mx, rot_mat_to_euler
 
 class FLAME(nn.Module):
     """
-    Given flame parameters this class generates a differentiable FLAME function
-    which outputs the a mesh and 3D facial landmarks
+    Given FLAME parameters, this class generates a differentiable 3D head mesh 
+    and associated facial landmarks.
+    
+    Attributes:
+        faces (mx.array): Face indices of the mesh.
+        v_template (mx.array): Mean shape template (neutral head).
+        shapedirs (mx.array): PCA basis for identity and expression shapes.
+        posedirs (mx.array): PCA basis for pose-corrective blendshapes.
+        J_regressor (mx.array): Matrix to regress joint positions from vertices.
+        parents (mx.array): Kinematic chain parent indices for joints.
+        lbs_weights (mx.array): Skinning weights for Linear Blend Skinning.
     """
     def __init__(self, config):
+        """
+        Initializes the FLAME model with provided configuration and learned model files.
+        
+        Args:
+            config: Configuration object containing model paths and hyperparameters.
+        """
         super().__init__()
         print("creating the FLAME Decoder in MLX")
         with open(config.flame_model_path, "rb") as f:
@@ -36,7 +51,7 @@ class FLAME(nn.Module):
         
         # Shape betas
         default_shape = mx.zeros((self.batch_size, 300 - config.shape_params))
-        self.shape_betas = default_shape # MLX doesn't have register_parameter, just use arrays or state
+        self.shape_betas = default_shape 
         
         # Expression betas
         default_exp = mx.zeros((self.batch_size, 100 - config.expression_params))
@@ -65,8 +80,6 @@ class FLAME(nn.Module):
         
         # Parent indices
         parents = to_mx(self.flame_model.kintree_table[0], dtype=mx.int32)
-        # parents[0] = -1 in PyTorch, but MLX index can't be -1 for some ops.
-        # Actually, lbs handles parents[1:] so it's fine.
         self.parents = parents
         
         # LBS weights
@@ -98,7 +111,6 @@ class FLAME(nn.Module):
             curr_idx = self.NECK_IDX
             while curr_idx != -1:
                 neck_kin_chain.append(curr_idx)
-                # kintree_table[0] has parents
                 curr_idx = int(self.flame_model.kintree_table[0][curr_idx]) if curr_idx != 0 else -1
             self.neck_kin_chain = mx.array(neck_kin_chain, dtype=mx.int32)
         else:
@@ -117,26 +129,35 @@ class FLAME(nn.Module):
         neck_kin_chain,
     ):
         """
-        Selects the face contour depending on the relative position of the head
+        Dynamically selects face contour landmark indices and barycentric coordinates 
+        based on the global rotation of the head.
+        
+        Args:
+            vertices (mx.array): Posed mesh vertices.
+            pose (mx.array): Full joint poses (axis-angle).
+            dynamic_lmk_faces_idx (mx.array): Precomputed contour face indices.
+            dynamic_lmk_b_coords (mx.array): Precomputed contour barycentric coords.
+            neck_kin_chain (mx.array): Chain of joint indices to compute head rotation.
+            
+        Returns:
+            tuple: (dyn_lmk_faces_idx, dyn_lmk_b_coords)
         """
         batch_size = vertices.shape[0]
         
         # pose is (B, J, 3) where J is number of joints
-        # Index select across joints dimension
         aa_pose = pose[:, neck_kin_chain] # (B, K, 3)
         
-        # batch_rodrigues expects (N, 3)
         rot_mats = batch_rodrigues(aa_pose.reshape(-1, 3)).reshape(batch_size, -1, 3, 3)
         
         rel_rot_mat = mx.broadcast_to(mx.eye(3)[None], (batch_size, 3, 3))
         for idx in range(len(neck_kin_chain)):
             rel_rot_mat = mx.matmul(rot_mats[:, idx], rel_rot_mat)
             
-        # y_rot_angle calculation
+        # Compute head rotation angle around y-axis for contour selection
         y_rot_angle_rad = rot_mat_to_euler(rel_rot_mat)
         y_rot_angle = mx.round(mx.clip(-y_rot_angle_rad * 180.0 / np.pi, a_min=-100, a_max=39)).astype(mx.int32)
         
-        # Handle negative angles (same logic as PyTorch)
+        # Handle negative angles for mirrored indexing
         neg_mask = y_rot_angle < 0
         mask = y_rot_angle < -39
         neg_vals = mask.astype(mx.int32) * 78 + (1 - mask.astype(mx.int32)) * (39 - y_rot_angle)
@@ -157,10 +178,20 @@ class FLAME(nn.Module):
         transl=None,
     ):
         """
-        Input:
-            shape_params: B X number of shape parameters
-            expression_params: B X number of expression parameters
-            pose_params: B X 6 (global rotation + jaw)
+        Forward pass to generate the head mesh and landmarks.
+        
+        Args:
+            shape_params (mx.array): Identity coefficients (B, 10-300).
+            expression_params (mx.array): Expression coefficients (B, 10-100).
+            pose_params (mx.array): Global rotation and jaw rotation (B, 6).
+            neck_pose (mx.array): Neck rotation coefficients (B, 3). Defaults to zero.
+            eye_pose (mx.array): Eyeball rotation coefficients (B, 6). Defaults to zero.
+            transl (mx.array): 3D translation vector (B, 3). Defaults to zero.
+            
+        Returns:
+            tuple: (vertices, landmarks)
+                - vertices (mx.array): Posed 3D mesh vertices of shape (B, 5023, 3).
+                - landmarks (mx.array): Calculated 3D facial landmarks of shape (B, 68, 3).
         """
         if shape_params is None:
             shape_params = mx.zeros((self.batch_size, 100)) # Default 100
@@ -169,6 +200,7 @@ class FLAME(nn.Module):
         if pose_params is None:
             pose_params = mx.zeros((self.batch_size, 6))
 
+        # Concatenate base and variation betas
         betas = mx.concatenate(
             [shape_params, self.shape_betas, expression_params, self.expression_betas],
             axis=1,
@@ -178,14 +210,14 @@ class FLAME(nn.Module):
         eye_pose = eye_pose if eye_pose is not None else self.eye_pose
         transl = transl if transl is not None else self.transl
         
-        # pose_params[:, :3] is global rotation, pose_params[:, 3:] is jaw
-        # full_pose: [global, neck, jaw, eyes]
+        # full_pose: [global_rot, neck_pose, jaw_pose, eye_pose]
         full_pose = mx.concatenate(
             [pose_params[:, :3], neck_pose, pose_params[:, 3:6], eye_pose], axis=1
         ).reshape(self.batch_size, -1, 3)
         
         template_vertices = mx.broadcast_to(self.v_template[None], (self.batch_size, *self.v_template.shape))
         
+        # Linear Blend Skinning
         vertices, _ = lbs(
             betas,
             full_pose,
@@ -198,6 +230,7 @@ class FLAME(nn.Module):
             pose2rot=True
         )
         
+        # Landmark interpolation
         if self.lmk_faces_idx is not None:
             lmk_faces_idx = mx.broadcast_to(self.lmk_faces_idx[None], (self.batch_size, *self.lmk_faces_idx.shape))
             lmk_bary_coords = mx.broadcast_to(self.lmk_bary_coords[None], (self.batch_size, *self.lmk_bary_coords.shape))
@@ -217,6 +250,7 @@ class FLAME(nn.Module):
         else:
             landmarks = None
         
+        # Apply 3D translation
         if self.use_3D_translation:
             if landmarks is not None:
                 landmarks += transl[:, None, :]

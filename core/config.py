@@ -2,6 +2,16 @@
 import argparse
 
 def get_config():
+    """
+    Parses command line arguments and returns a configuration object for FLAME.
+    
+    The configuration includes paths to model files, landmark embeddings, 
+    and architectural hyperparameters for the FLAME model.
+    
+    Returns:
+        argparse.Namespace: An object containing all the configuration parameters 
+                           as attributes (e.g., config.flame_model_path).
+    """
     parser = argparse.ArgumentParser(description="FLAME model in MLX")
 
     parser.add_argument(
