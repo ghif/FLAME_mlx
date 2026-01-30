@@ -66,7 +66,48 @@ def main():
         print(f"Error: Default model {MODEL_PATHS['Generic']} not found.")
     
     # UI Components
-    # ... [UI Setup Code] ...
+    with server.gui.add_folder("Model Selection"):
+        model_dropdown = server.gui.add_dropdown(
+            "Model Type",
+            options=["Generic"],
+            initial_value="Generic",
+        )
+
+    shape_sliders = []
+    with server.gui.add_folder("Shape Parameters"):
+        for i in range(10):
+            shape_sliders.append(
+                server.gui.add_slider(
+                    f"Shape {i}",
+                    min=-3.0,
+                    max=3.0,
+                    step=0.1,
+                    initial_value=0.0,
+                )
+            )
+
+    expr_sliders = []
+    with server.gui.add_folder("Expression Parameters"):
+        for i in range(10):
+            expr_sliders.append(
+                server.gui.add_slider(
+                    f"Expression {i}",
+                    min=-3.0,
+                    max=3.0,
+                    step=0.1,
+                    initial_value=0.0,
+                )
+            )
+
+    with server.gui.add_folder("Jaw Pose"):
+        jaw_x = server.gui.add_slider("Jaw Pitch", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
+        jaw_y = server.gui.add_slider("Jaw Yaw", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
+        jaw_z = server.gui.add_slider("Jaw Roll", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
+
+    with server.gui.add_folder("Neck Pose"):
+        neck_x = server.gui.add_slider("Neck Pitch", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
+        neck_y = server.gui.add_slider("Neck Yaw", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
+        neck_z = server.gui.add_slider("Neck Roll", min=-0.5, max=0.5, step=0.01, initial_value=0.0)
 
     # Update Function
     def update_mesh():
